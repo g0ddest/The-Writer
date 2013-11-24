@@ -53,16 +53,16 @@ def about():
 def user_info(username):
     return 'information about ' + username
 
-@app.route('/work/<int:id>', methods=['GET'])
-def work(id):
-    return render_template('work.html', title='Work', text=api_work_get(id))
+@app.route('/work/<username>/<work>/<file>', methods=['GET'])
+def work(username, work, file):
+    return render_template('work.html', title='Work', text=api_work_get(username, work, file))
 
 # ------------------------
 # api for web application
 
-@app.route('/api/work/<int:id>', methods=['GET'])
-def api_work_get(id):
-    with open('e:/projects/Writer/works/' + str(id) + '.md') as f:
+@app.route('/api/work/<username>/<work>/<file>', methods=['GET'])
+def api_work_get(username, work, file):
+    with open('e:/projects/Writer/works/%s/%s/%s.md' % (username, work, file)) as f:
         return f.read()
 
 @app.route('/api/work/<int:id>', methods=['POST'])
