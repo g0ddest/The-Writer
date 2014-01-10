@@ -1,8 +1,9 @@
 from flask import Flask, session, render_template, Markup, request, redirect, escape, abort
 from jinja2 import evalcontextfilter
 import markdown as md
-from mongokit import Connection, Document
+from mongokit import Connection
 import hashlib
+from functools import wraps
 
 mdfive = hashlib.md5()
 
@@ -60,41 +61,72 @@ DEBUG = True
 app.debug = DEBUG
 app.secret_key = '$M*tQFTpH@u*vUGjiWzBKxLLCGm43n'
 
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' in session and 'user_id' in session:
+            return f(*args, **kwargs)
+        else:
+            #TODO: write some message
+            return redirect('/')
+    return decorated_function
+
+
+def guest_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' in session and 'user_id' in session:
+            #TODO: write some message
+            return redirect('/')
+        else:
+            return f(*args, **kwargs)
+    return decorated_function
+
+
 @app.route('/')
 def hello_world():
     return render_template('index.html')
+
 
 @app.route('/about')
 def about():
     return 'The about page'
 
+
+@app.route('/me/')
+@login_required
+def current_user_info():
+    return 'user: ' + session['username'] + ' id: ' + session['user_id']
+
+
 @app.route('/user/<username>')
 def user_info(username):
     return 'information about ' + username
 
+
 @app.route('/login', methods=['GET', 'POST'])
+@guest_required
 def login():
-    if 'username' in session and 'user_id' in session:
-        return 'First logout'
-    else:
-        if request.method == 'POST':
-            mdfive.update(request.form['password'])
-            # Potential injection. Parse data, please
-            user = users.find_one({'login': request.form['username'], 'password': mdfive.hexdigest()})
-            if user:
-                session['username'] = request.form['username']
-                session['user_id'] = request.form['password']
-                return 'Logged in!'
-            else:
-                abort(401)
-            #return redirect('/')
-        return '''
-            <form action="" method="post">
-                <p><input type=text name=username>
-                <p><input type=text name=password>
-                <p><input type=submit value=Login>
-            </form>
-        '''
+    if request.method == 'POST':
+        mdfive.update(request.form['password'])
+        #TODO: Potential injection. Parse data, please
+        user = users.find_one({'login': request.form['username'], 'password': mdfive.hexdigest()})
+        if user:
+            session['username'] = request.form['username']
+            session['user_id'] = str(user['_id'])
+            return 'Logged in!'
+        else:
+            abort(401)
+        #return redirect('/')
+    return '''
+        <form action="" method="post">
+            <p><input type=text name=username>
+            <p><input type=text name=password>
+            <p><input type=submit value=Login>
+        </form>
+    '''
+
 
 @app.route('/logout')
 def logout():
@@ -103,6 +135,7 @@ def logout():
     session.pop('user_id', None)
     return redirect('/')
 
+
 @app.route('/work/<username>/<work>/<file>', methods=['GET'])
 def work(username, work, file):
     return render_template('work.html', title='Work', text=api_work_get(username, work, file))
@@ -110,10 +143,12 @@ def work(username, work, file):
 # ------------------------
 # api for web application
 
+
 @app.route('/api/work/<username>/<work>/<file>', methods=['GET'])
 def api_work_get(username, work, file):
     with open('d:/projects/Writer/works/%s/%s/%s.md' % (username, work, file)) as f:
         return f.read()
+
 
 @app.route('/api/work/<int:id>', methods=['POST'])
 def api_work_post(id):
