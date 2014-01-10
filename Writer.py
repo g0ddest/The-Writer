@@ -1,8 +1,10 @@
-from flask import Flask
-from flask import render_template
-from flask import Markup
-from jinja2 import evalcontextfilter, escape
+from flask import Flask, session, render_template, Markup, request, redirect, escape, abort
+from jinja2 import evalcontextfilter
 import markdown as md
+from mongokit import Connection, Document
+import hashlib
+
+mdfive = hashlib.md5()
 
 class Markdown(object):
     def __init__(self, app, auto_escape=False, **markdown_options):
@@ -34,12 +36,29 @@ class Markdown(object):
         self._instance.registerExtensions([instance], configs)
         return ext_cls
 
+def max_length(length):
+    def validate(value):
+        if len(value) <= length:
+            return True
+        raise Exception('%s must be at most %s characters long' % length)
+    return validate
+
 app = Flask(__name__)
+app.config.from_object(__name__)
+
+connection = Connection()
+
+# Define collections
+
+collection = connection['writer']
+users = collection.users
+works = collection.works
 
 Markdown(app)
 
 DEBUG = True
 app.debug = DEBUG
+app.secret_key = '$M*tQFTpH@u*vUGjiWzBKxLLCGm43n'
 
 @app.route('/')
 def hello_world():
@@ -53,6 +72,37 @@ def about():
 def user_info(username):
     return 'information about ' + username
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if 'username' in session and 'user_id' in session:
+        return 'First logout'
+    else:
+        if request.method == 'POST':
+            mdfive.update(request.form['password'])
+            # Potential injection. Parse data, please
+            user = users.find_one({'login': request.form['username'], 'password': mdfive.hexdigest()})
+            if user:
+                session['username'] = request.form['username']
+                session['user_id'] = request.form['password']
+                return 'Logged in!'
+            else:
+                abort(401)
+            #return redirect('/')
+        return '''
+            <form action="" method="post">
+                <p><input type=text name=username>
+                <p><input type=text name=password>
+                <p><input type=submit value=Login>
+            </form>
+        '''
+
+@app.route('/logout')
+def logout():
+    # remove the username from the session if it's there
+    session.pop('username', None)
+    session.pop('user_id', None)
+    return redirect('/')
+
 @app.route('/work/<username>/<work>/<file>', methods=['GET'])
 def work(username, work, file):
     return render_template('work.html', title='Work', text=api_work_get(username, work, file))
@@ -62,7 +112,7 @@ def work(username, work, file):
 
 @app.route('/api/work/<username>/<work>/<file>', methods=['GET'])
 def api_work_get(username, work, file):
-    with open('e:/projects/Writer/works/%s/%s/%s.md' % (username, work, file)) as f:
+    with open('d:/projects/Writer/works/%s/%s/%s.md' % (username, work, file)) as f:
         return f.read()
 
 @app.route('/api/work/<int:id>', methods=['POST'])
