@@ -7,6 +7,7 @@ from functools import wraps
 
 mdfive = hashlib.md5()
 
+
 class Markdown(object):
     def __init__(self, app, auto_escape=False, **markdown_options):
         self.auto_escape = auto_escape
@@ -36,6 +37,7 @@ class Markdown(object):
         instance = ext_cls()
         self._instance.registerExtensions([instance], configs)
         return ext_cls
+
 
 def max_length(length):
     def validate(value):
@@ -81,6 +83,36 @@ def guest_required(f):
             return redirect('/')
         else:
             return f(*args, **kwargs)
+    return decorated_function
+
+
+def work_rights_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        owning_user = users.find_one({'login': kwargs['username']})
+        if owning_user:
+            work = works.find_one({'$and': [{'owner': str(owning_user['_id'])}, {'name': kwargs['work']}]})
+            if work:
+                have_this_inner = False
+                for inner in work['contains']:
+                    if inner['name'] == kwargs['file']:
+                        have_this_inner = True
+                if have_this_inner:
+                    if work['access'] == "public":
+                        return f(*args, **kwargs)
+                    else:
+                        #TODO: make access control
+                        #TODO: write some message
+                        return redirect('/')
+                else:
+                    #TODO: write some message
+                    return redirect('/')
+            else:
+                #TODO: write some message
+                return redirect('/')
+        else:
+            #TODO: write some message
+            return redirect('/')
     return decorated_function
 
 
@@ -137,6 +169,7 @@ def logout():
 
 
 @app.route('/work/<username>/<work>/<file>', methods=['GET'])
+@work_rights_required
 def work(username, work, file):
     return render_template('work.html', title='Work', text=api_work_get(username, work, file))
 
