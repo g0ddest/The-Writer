@@ -5,8 +5,6 @@ from mongokit import Connection
 import hashlib
 from functools import wraps
 
-mdfive = hashlib.md5()
-
 
 class Markdown(object):
     def __init__(self, app, auto_escape=False, **markdown_options):
@@ -38,13 +36,6 @@ class Markdown(object):
         self._instance.registerExtensions([instance], configs)
         return ext_cls
 
-
-def max_length(length):
-    def validate(value):
-        if len(value) <= length:
-            return True
-        raise Exception('%s must be at most %s characters long' % length)
-    return validate
 
 app = Flask(__name__)
 app.config.from_object(__name__)
@@ -86,7 +77,7 @@ def guest_required(f):
     return decorated_function
 
 
-def work_rights_required(f):
+def chapter_rights_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         owning_user = users.find_one({'login': kwargs['username']})
@@ -126,10 +117,40 @@ def about():
     return 'The about page'
 
 
+@app.route('/register', methods=['GET', 'POST'])
+@guest_required
+def register():
+    if request.method == 'POST':
+        if request.form['username'] and request.form['name'] and request.form['password']:
+            mdfive = hashlib.md5()
+            mdfive.update(request.form['password'])
+            #TODO: Potential injection. Parse data, please
+            user = users.find_one({'login': request.form['username']})
+            if user:
+                return 'Not unique username'
+            else:
+                users.insert({
+                    'login': request.form['username'],
+                    'password': mdfive.hexdigest(),
+                    'name': request.form['name']
+                })
+                return "User added!"
+        else:
+            return 'Please, fill all fields'
+    return '''
+        <form action="" method="post">
+            <p><input placeholder="Name" type=text name=name>
+            <p><input placeholder="Login" type=text name=username>
+            <p><input placeholder="Password" type=text name=password>
+            <p><input type=submit value=Register>
+        </form>
+    '''
+
+
 @app.route('/me/')
 @login_required
 def current_user_info():
-    return 'user: ' + session['username'] + ' id: ' + session['user_id']
+    return u'user: ' + session['username'] + u' id: ' + session['user_id']
 
 
 @app.route('/user/<username>')
@@ -141,11 +162,12 @@ def user_info(username):
 @guest_required
 def login():
     if request.method == 'POST':
+        mdfive = hashlib.md5()
         mdfive.update(request.form['password'])
         #TODO: Potential injection. Parse data, please
-        user = users.find_one({'login': request.form['username'], 'password': mdfive.hexdigest()})
+        user = users.find_one({'$and': [{'login': request.form['username']}, {'password': mdfive.hexdigest()}]})
         if user:
-            session['username'] = request.form['username']
+            session['username'] = user['login']
             session['user_id'] = str(user['_id'])
             return 'Logged in!'
         else:
@@ -169,7 +191,7 @@ def logout():
 
 
 @app.route('/work/<username>/<work>/<file>', methods=['GET'])
-@work_rights_required
+@chapter_rights_required
 def work(username, work, file):
     return render_template('work.html', title='Work', text=api_work_get(username, work, file))
 
