@@ -4,6 +4,7 @@ import markdown as md
 from mongokit import Connection
 import hashlib
 from functools import wraps
+import datetime
 
 
 class Markdown(object):
@@ -85,6 +86,7 @@ def work_rights_required(f):
             work = works.find_one({'$and': [{'owner': str(owning_user['_id'])}, {'name': kwargs['work']}]})
             if work:
                 if work['access'] == "public":
+                    #TODO: forward to function's arguments owning_user and work
                     return f(*args, **kwargs)
                 else:
                     #TODO: make access control
@@ -175,7 +177,7 @@ def current_user_info():
     return u'user: ' + session['username'] + u' id: ' + session['user_id']
 
 
-@app.route('/user/<username>')
+@app.route('/work/<username>',  methods=['GET'])
 def user_info(username):
     user = users.find_one({'login': username})
     if user:
@@ -185,7 +187,9 @@ def user_info(username):
                 'user.html',
                 title='User',
                 works=works.find({'owner': str(user['_id'])}),
-                username=username)
+                username=username,
+                is_current_user=str(user['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False
+            )
     else:
         return 'we have no user with this login'
 
@@ -220,6 +224,37 @@ def logout():
     session.pop('user_id', None)
     return redirect('/')
 
+
+@app.route('/work/<username>', methods=['POST'])
+@login_required
+def work_add(username):
+    if 'name' in request.form and 'title' in request.form and 'access' in request.form and 'description' in request.form:
+        user = users.find_one({'login': username})
+        if user:
+            existing = works.find_one({'$and': [{'name': request.form['name']}, {'owner': str(user['_id'])}]})
+            if not existing:
+                works.insert({
+                    'owner': str(user['_id']),
+                    'name': request.form['name'],
+                    'title': request.form['title'],
+                    'description': request.form['description'],
+                    #TODO: change on next milestone
+                    'vcs': False,
+                    #TODO: check is only in [public, private]
+                    'access': request.form['access'],
+                    'share': [],
+                    'created': datetime.datetime.now(),
+                    'modified': datetime.datetime.now(),
+                    'contains': []
+                })
+                return redirect('/work/%s' % username)
+            else:
+                return "There is such name"
+        else:
+            return "No such user"
+    else:
+        return "Fill all the fields"
+
 @app.route('/work/<username>/<work>', methods=['GET'])
 @work_rights_required
 def work_description(username, work):
@@ -231,7 +266,9 @@ def work_description(username, work):
                 render_template(
                     'chapters.html',
                     username=username,
-                    work=current_work)
+                    work=current_work,
+                    is_current_user=str(user['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False
+                )
         else:
             #TODO: more informative
             return "No such work"
