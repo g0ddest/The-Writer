@@ -155,7 +155,17 @@ def current_user_info():
 
 @app.route('/user/<username>')
 def user_info(username):
-    return 'information about ' + username
+    user = users.find_one({'login': username})
+    if user:
+        #TODO: add permissions (do not show private)
+        return \
+            render_template(
+                'user.html',
+                title='User',
+                works=works.find({'owner': str(user['_id'])}),
+                username=username)
+    else:
+        return 'we have no user with this login'
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -193,7 +203,11 @@ def logout():
 @app.route('/work/<username>/<work>/<file>', methods=['GET'])
 @chapter_rights_required
 def work(username, work, file):
-    return render_template('work.html', title='Work', text=api_work_get(username, work, file))
+    return \
+        render_template(
+            'work.html',
+            title='Work',
+            text=api_work_get(username, work, file))
 
 # ------------------------
 # api for web application

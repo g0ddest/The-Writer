@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User</title>
+</head>
+<body>
+<h3>All works:</h3>
+<ul>
+{% for work in works %}
+    <li><a href="/work/{{ username }}/{{ work['name'] }}">{{ work['title'] }}</a></li>
+{% endfor %}
+</ul>
+</body>
+</html>
