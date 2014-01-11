@@ -5,6 +5,7 @@ from mongokit import Connection
 import hashlib
 from functools import wraps
 import datetime
+import os
 
 
 class Markdown(object):
@@ -40,6 +41,7 @@ class Markdown(object):
 
 app = Flask(__name__)
 app.config.from_object(__name__)
+works_location = u'd:/projects/Writer/works'
 
 connection = Connection()
 
@@ -136,12 +138,12 @@ def hello_world():
     return render_template('index.html')
 
 
-@app.route('/about')
+@app.route('/about/')
 def about():
     return 'The about page'
 
 
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register/', methods=['GET', 'POST'])
 @guest_required
 def register():
     if request.method == 'POST':
@@ -177,7 +179,7 @@ def current_user_info():
     return u'user: ' + session['username'] + u' id: ' + session['user_id']
 
 
-@app.route('/work/<username>',  methods=['GET'])
+@app.route('/work/<username>/',  methods=['GET'])
 def user_info(username):
     user = users.find_one({'login': username})
     if user:
@@ -194,7 +196,7 @@ def user_info(username):
         return 'we have no user with this login'
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login/', methods=['GET', 'POST'])
 @guest_required
 def login():
     if request.method == 'POST':
@@ -218,14 +220,14 @@ def login():
     '''
 
 
-@app.route('/logout')
+@app.route('/logout/')
 def logout():
     session.pop('username', None)
     session.pop('user_id', None)
     return redirect('/')
 
 
-@app.route('/work/<username>', methods=['POST'])
+@app.route('/work/<username>/', methods=['POST'])
 @login_required
 def work_add(username):
     if 'name' in request.form and 'title' in request.form and 'access' in request.form and 'description' in request.form:
@@ -255,7 +257,48 @@ def work_add(username):
     else:
         return "Fill all the fields"
 
-@app.route('/work/<username>/<work>', methods=['GET'])
+@app.route('/work/<username>/<work>/+/', methods=['GET', 'POST'])
+@work_rights_required
+def add_chapter(username, work):
+    user = users.find_one({'login': username})
+    if user:
+        current_work = works.find_one({'$and': [{'owner': str(user['_id'])}, {'name': work}]})
+        if current_work:
+            #TODO: check shared rights
+            if(str(user['_id']) == str(session['user_id'])
+               if 'user_id' in session and 'username' in session else False):
+                if request.method == "GET":
+                    return render_template("add_chapter.html", work=current_work)
+                else:
+                    if not os.path.isdir("%s/%s" % (works_location, username)):
+                        os.makedirs("%s/%s" % (works_location, username))
+                    if not os.path.isdir("%s/%s/%s" % (works_location, username, work)):
+                        os.makedirs("%s/%s/%s" % (works_location, username, work))
+                    args = (works_location, username, work, request.form["name"])
+                    with open("%s/%s/%s/%s.md" % args, 'w') as file:
+                        file.write(request.form["text"].encode('utf-8'))
+
+                    works.update(
+                        {'$and': [{'owner': str(user['_id'])}, {'name': work}]},
+                        {
+                            '$set': {'modified': datetime.datetime.now()},
+                            '$push': {'contains': {
+                                'name': request.form["name"],
+                                'title': request.form["title"],
+                                'created': datetime.datetime.now(),
+                                'updated': datetime.datetime.now()
+                            }}
+                        }
+                    )
+
+                    return "ok"
+            else:
+                return "You have no permission"
+        else:
+            #TODO: more informative
+            return "No such work"
+
+@app.route('/work/<username>/<work>/', methods=['GET'])
 @work_rights_required
 def work_description(username, work):
     user = users.find_one({'login': username})
@@ -276,27 +319,27 @@ def work_description(username, work):
         #TODO: more informative
         return "No such user"
 
-@app.route('/work/<username>/<work>/<file>', methods=['GET'])
+@app.route('/work/<username>/<work>/<file>/', methods=['GET'])
 @chapter_rights_required
 def work(username, work, file):
     return \
         render_template(
             'work.html',
             title='Work',
-            text=api_work_get(username, work, file))
+            text='\n\r%s' % api_work_get(username, work, file))
 
 # ------------------------
 # api for web application
 
 
-@app.route('/api/work/<username>/<work>/<file>', methods=['GET'])
+@app.route('/api/work/<username>/<work>/<file>/', methods=['GET'])
 def api_work_get(username, work, file):
     #TODO: add permission check
-    with open('d:/projects/Writer/works/%s/%s/%s.md' % (username, work, file)) as f:
-        return f.read()
+    with open('%s/%s/%s/%s.md' % (works_location, username, work, file)) as f:
+        return f.read().decode('utf-8')
 
 
-@app.route('/api/work/<int:id>', methods=['POST'])
+@app.route('/api/work/<int:id>/', methods=['POST'])
 def api_work_post(id):
     return 'information about ' + str(id)
 

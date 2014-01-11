@@ -6,7 +6,7 @@
 <body>
 <h2>{{ work['title'] }}</h2>
 {% if is_current_user %}
-    </a>Add new chapter</a>
+    <a href="/work/{{ username }}/{{ work['name'] }}/+">Add new chapter</a>
 {% endif %}
 <ul>
     {% for chapter in work['contains'] %}
