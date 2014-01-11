@@ -77,6 +77,28 @@ def guest_required(f):
     return decorated_function
 
 
+def work_rights_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        owning_user = users.find_one({'login': kwargs['username']})
+        if owning_user:
+            work = works.find_one({'$and': [{'owner': str(owning_user['_id'])}, {'name': kwargs['work']}]})
+            if work:
+                if work['access'] == "public":
+                    return f(*args, **kwargs)
+                else:
+                    #TODO: make access control
+                    #TODO: write some message
+                    return redirect('/')
+            else:
+                #TODO: write some message
+                return redirect('/')
+        else:
+            #TODO: write some message
+            return redirect('/')
+    return decorated_function
+
+
 def chapter_rights_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -194,11 +216,28 @@ def login():
 
 @app.route('/logout')
 def logout():
-    # remove the username from the session if it's there
     session.pop('username', None)
     session.pop('user_id', None)
     return redirect('/')
 
+@app.route('/work/<username>/<work>', methods=['GET'])
+@work_rights_required
+def work_description(username, work):
+    user = users.find_one({'login': username})
+    if user:
+        current_work = works.find_one({'$and': [{'owner': str(user['_id'])}, {'name': work}]})
+        if current_work:
+            return \
+                render_template(
+                    'chapters.html',
+                    username=username,
+                    work=current_work)
+        else:
+            #TODO: more informative
+            return "No such work"
+    else:
+        #TODO: more informative
+        return "No such user"
 
 @app.route('/work/<username>/<work>/<file>', methods=['GET'])
 @chapter_rights_required
@@ -215,6 +254,7 @@ def work(username, work, file):
 
 @app.route('/api/work/<username>/<work>/<file>', methods=['GET'])
 def api_work_get(username, work, file):
+    #TODO: add permission check
     with open('d:/projects/Writer/works/%s/%s/%s.md' % (username, work, file)) as f:
         return f.read()
 
