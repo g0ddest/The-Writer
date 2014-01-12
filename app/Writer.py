@@ -1,3 +1,5 @@
+from app import app, connection, models
+
 from flask import Flask, session, render_template, Markup, request, redirect, escape, abort
 from jinja2 import evalcontextfilter
 import markdown as md
@@ -40,24 +42,14 @@ class Markdown(object):
         return ext_cls
 
 
-app = Flask(__name__)
-app.config.from_object(__name__)
 works_location = u'%s/works' % CURRENT_DIR
 
-connection = Connection()
-
 # Define collections
-
-collection = connection['writer']
-users = collection.users
-works = collection.works
+works = connection[ app.config['DATABASE'] ].works
 
 Markdown(app)
 
 DEBUG = True
-app.debug = DEBUG
-app.secret_key = '$M*tQFTpH@u*vUGjiWzBKxLLCGm43n'
-
 
 def login_required(f):
     @wraps(f)
@@ -84,7 +76,7 @@ def guest_required(f):
 def work_rights_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        owning_user = users.find_one({'login': kwargs['username']})
+        owning_user = connection.User.find_one({'login': kwargs['username']})
         if owning_user:
             work = works.find_one({'$and': [{'owner': str(owning_user['_id'])}, {'name': kwargs['work']}]})
             if work:
@@ -107,7 +99,7 @@ def work_rights_required(f):
 def chapter_rights_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        owning_user = users.find_one({'login': kwargs['username']})
+        owning_user = connection.User.find_one({'login': kwargs['username']})
         if owning_user:
             work = works.find_one({'$and': [{'owner': str(owning_user['_id'])}, {'name': kwargs['work']}]})
             if work:
@@ -152,15 +144,15 @@ def register():
             mdfive = hashlib.md5()
             mdfive.update(request.form['password'])
             #TODO: Potential injection. Parse data, please
-            user = users.find_one({'login': request.form['username']})
+            user = connection.User.find_one({'login': request.form['username']})
             if user:
                 return 'Not a unique username'
             else:
-                users.insert({
+                connection.User({
                     'login': request.form['username'],
                     'password': mdfive.hexdigest(),
                     'name': request.form['name']
-                })
+                }).save()
                 return "User added!"
         else:
             return 'Please, fill all fields'
@@ -182,7 +174,7 @@ def current_user_info():
 
 @app.route('/work/<username>/',  methods=['GET'])
 def user_info(username):
-    user = users.find_one({'login': username})
+    user = connection.User.find_one({'login': username})
     if user:
         #TODO: add permissions (do not show private)
         return \
@@ -204,7 +196,7 @@ def login():
         mdfive = hashlib.md5()
         mdfive.update(request.form['password'])
         #TODO: Potential injection. Parse data, please
-        user = users.find_one({'$and': [{'login': request.form['username']}, {'password': mdfive.hexdigest()}]})
+        user = connection.User.find_one({'$and': [{'login': request.form['username']}, {'password': mdfive.hexdigest()}]})
         if user:
             session['username'] = user['login']
             session['user_id'] = str(user['_id'])
@@ -232,7 +224,7 @@ def logout():
 @login_required
 def work_add(username):
     if 'name' in request.form and 'title' in request.form and 'access' in request.form and 'description' in request.form:
-        user = users.find_one({'login': username})
+        user = connection.User.find_one({'login': username})
         if user:
             existing = works.find_one({'$and': [{'name': request.form['name']}, {'owner': str(user['_id'])}]})
             if not existing:
@@ -261,7 +253,7 @@ def work_add(username):
 @app.route('/work/<username>/<work>/+/', methods=['GET', 'POST'])
 @work_rights_required
 def add_chapter(username, work):
-    user = users.find_one({'login': username})
+    user = connection.User.find_one({'login': username})
     if user:
         current_work = works.find_one({'$and': [{'owner': str(user['_id'])}, {'name': work}]})
         if current_work:
@@ -302,7 +294,7 @@ def add_chapter(username, work):
 @app.route('/work/<username>/<work>/', methods=['GET'])
 @work_rights_required
 def work_description(username, work):
-    user = users.find_one({'login': username})
+    user = connection.User.find_one({'login': username})
     if user:
         current_work = works.find_one({'$and': [{'owner': str(user['_id'])}, {'name': work}]})
         if current_work:
@@ -343,6 +335,3 @@ def api_work_get(username, work, file):
 @app.route('/api/work/<int:id>/', methods=['POST'])
 def api_work_post(id):
     return 'information about ' + str(id)
-
-if __name__ == '__main__':
-    app.run()

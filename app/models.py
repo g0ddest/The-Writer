@@ -1,30 +1,34 @@
-from app import db
+from app import app, connection
+from mongokit import Document
 
+def max_length(length):
+    def validate(value):
+        if len(value) <= length:
+            return True
+        raise Exception('%s must be at most %s characters long' % length)
+    return validate
 
-
-class User(db.Document):
-    login = db.StringField(unique = True)
-    password = db.BinaryField()
-    name = db.StringField()
-    
-    def is_authenticated(self):
-        return True
-    
-    def is_active(self):
-        return True
-    
-    def is_anonymous(self):
-        return False
-    
-    def get_id(self):
-        return unicode(self.id)
-    
+class User(Document):
+    __database__ = app.config['DATABASE']
+    __collection__ = "users"
+    structure = {
+        'login': unicode,
+        'password': basestring, #TODO binary
+        'name': unicode,
+    }
+    validators = {
+        'login': max_length(50),
+        'name': max_length(120),
+    }
+    indexes = [
+        {
+            'fields': ['login'],
+            'unique': True,
+        },
+    ]
+    use_dot_notation = True
     def __repr__(self):
         return '<User %r>' % (self.login)
 
-#for a in User.objects.all():
-#    a.delete()
-#
-#User(login = "admin", name = "Admin", password="").save()
-#
-#print User.objects.all()
+connection.register([User])
+
