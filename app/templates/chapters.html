@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+</head>
+<body>
+<h2>{{ work['title'] }}</h2>
+{% if is_current_user %}
+    <a href="/work/{{ username }}/{{ work['name'] }}/+">Add new chapter</a>
+{% endif %}
+<ul>
+    {% for chapter in work['contains'] %}
+        <li><a href="/work/{{ username }}/{{ work['name'] }}/{{ chapter['name'] }}">{{ chapter['title'] }}</a></li>
+    {% endfor %}
+</ul>
+</body>
+</html>
