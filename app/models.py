@@ -8,8 +8,9 @@ def max_length(length):
         raise Exception('%s must be at most %s characters long' % length)
     return validate
 
+@connection.register
 class User(Document):
-    __database__ = app.config['DATABASE']
+    __database__ = app.config['DB_NAME']
     __collection__ = "users"
     structure = {
         'login': unicode,

@@ -7,6 +7,6 @@ app = Flask(__name__)
 app.config.from_object('config')
 app.debug = app.config['DEBUG']
 app.secret_key = app.config['SECRET_KEY']
-connection = Connection()
-db = connection[ app.config['DATABASE'] ]
+connection = Connection( app.config['DB_HOST'], app.config['DB_PORT'] )
+db = connection[ app.config['DB_NAME'] ]
 from app import Writer
