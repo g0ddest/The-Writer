@@ -44,9 +44,6 @@ class Markdown(object):
 
 works_location = u'%s/works' % CURRENT_DIR
 
-# Define collections
-works = connection[ app.config['DATABASE'] ].works
-
 Markdown(app)
 
 DEBUG = True
@@ -78,7 +75,10 @@ def work_rights_required(f):
     def decorated_function(*args, **kwargs):
         owning_user = connection.User.find_one({'login': kwargs['username']})
         if owning_user:
-            work = works.find_one({'$and': [{'owner': str(owning_user['_id'])}, {'name': kwargs['work']}]})
+            work = connection.Work.find_one({'$and': [
+                                                    {'owner.$id': owning_user._id},
+                                                    {'name': kwargs['work']}
+                                                ]})
             if work:
                 if work['access'] == "public":
                     #TODO: forward to function's arguments owning_user and work
@@ -101,10 +101,13 @@ def chapter_rights_required(f):
     def decorated_function(*args, **kwargs):
         owning_user = connection.User.find_one({'login': kwargs['username']})
         if owning_user:
-            work = works.find_one({'$and': [{'owner': str(owning_user['_id'])}, {'name': kwargs['work']}]})
+            work = connection.Work.find_one({'$and': [
+                                            {'owner.$id': owning_user._id},
+                                            {'name': kwargs['work']}
+                                        ]})
             if work:
                 have_this_inner = False
-                for inner in work['contains']:
+                for inner in work['chapters']:
                     if inner['name'] == kwargs['file']:
                         have_this_inner = True
                 if have_this_inner:
@@ -181,7 +184,7 @@ def user_info(username):
             render_template(
                 'user.html',
                 title='User',
-                works=works.find({'owner': str(user['_id'])}),
+                works=connection.Work.find({'owner.$id': user._id}),
                 username=username,
                 is_current_user=str(user['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False
             )
@@ -226,10 +229,10 @@ def work_add(username):
     if 'name' in request.form and 'title' in request.form and 'access' in request.form and 'description' in request.form:
         user = connection.User.find_one({'login': username})
         if user:
-            existing = works.find_one({'$and': [{'name': request.form['name']}, {'owner': str(user['_id'])}]})
+            existing = connection.Work.find_one({'$and': [{'name': request.form['name']}, {'owner': user}]})
             if not existing:
-                works.insert({
-                    'owner': str(user['_id']),
+                connection.Work({
+                    'owner': user,
                     'name': request.form['name'],
                     'title': request.form['title'],
                     'description': request.form['description'],
@@ -237,11 +240,10 @@ def work_add(username):
                     'vcs': False,
                     #TODO: check is only in [public, private]
                     'access': request.form['access'],
-                    'share': [],
                     'created': datetime.datetime.now(),
                     'modified': datetime.datetime.now(),
-                    'contains': []
-                })
+                    'chapters': []
+                }).save()
                 return redirect('/work/%s' % username)
             else:
                 return "There is such name"
@@ -255,7 +257,10 @@ def work_add(username):
 def add_chapter(username, work):
     user = connection.User.find_one({'login': username})
     if user:
-        current_work = works.find_one({'$and': [{'owner': str(user['_id'])}, {'name': work}]})
+        current_work = connection.Work.find_one({'$and': [
+                                                {'owner.$id': user['_id']},
+                                                {'name': work}
+                                            ]})
         if current_work:
             #TODO: check shared rights
             if(str(user['_id']) == str(session['user_id'])
@@ -270,20 +275,14 @@ def add_chapter(username, work):
                     args = (works_location, username, work, request.form["name"])
                     with open("%s/%s/%s/%s.md" % args, 'w') as file:
                         file.write(request.form["text"].encode('utf-8'))
-
-                    works.update(
-                        {'$and': [{'owner': str(user['_id'])}, {'name': work}]},
-                        {
-                            '$set': {'modified': datetime.datetime.now()},
-                            '$push': {'contains': {
-                                'name': request.form["name"],
-                                'title': request.form["title"],
-                                'created': datetime.datetime.now(),
-                                'updated': datetime.datetime.now()
-                            }}
-                        }
-                    )
-
+                    
+                    current_work.modified = datetime.datetime.now()
+                    current_work.chapters.append({
+                        'name': request.form["name"],
+                        'title': request.form["title"],
+                        'created': datetime.datetime.now()
+                    })
+                    current_work.save()
                     return "ok"
             else:
                 return "You have no permission"
@@ -296,7 +295,7 @@ def add_chapter(username, work):
 def work_description(username, work):
     user = connection.User.find_one({'login': username})
     if user:
-        current_work = works.find_one({'$and': [{'owner': str(user['_id'])}, {'name': work}]})
+        current_work = connection.Work.find_one({'$and': [{'owner.$id': user['_id']}, {'name': work}]})
         if current_work:
             return \
                 render_template(
