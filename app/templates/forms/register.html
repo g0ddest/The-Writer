@@ -1,0 +1,9 @@
+{% from "forms/macros.html" import render_field %}
+<form action="/register/" method="post">
+    {{ form.csrf_token }}
+    {{ render_field(form.name, size=20) }}
+    {{ render_field(form.login, size=20) }}
+    {{ render_field(form.password, size=20) }}
+    {{ render_field(form.confirm, size=20) }}
+    <input type=submit value=Register>
+</form>
