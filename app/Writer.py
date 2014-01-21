@@ -1,13 +1,23 @@
 from app import app, connection, models, forms
 
-from flask import Flask, session, render_template, Markup, request, redirect, escape, abort
+from flask import Flask, g, session, render_template, Markup, request, redirect, escape, abort
 from jinja2 import evalcontextfilter
 import markdown as md
 from mongokit import Connection
+from bson.objectid import ObjectId
 
 from functools import wraps
 import datetime
 import os
+
+@app.before_request
+def before_request():
+    print session
+    g.user = None
+    if 'user_id' in session:
+        g.user = connection.User.find_one({'_id': ObjectId(session['user_id'])})
+        print g.user
+
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -51,7 +61,7 @@ DEBUG = True
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' in session and 'user_id' in session:
+        if g.user:
             return f(*args, **kwargs)
         else:
             #TODO: write some message
@@ -62,7 +72,7 @@ def login_required(f):
 def guest_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' in session and 'user_id' in session:
+        if g.user:
             #TODO: write some message
             return redirect('/')
         else:
@@ -145,7 +155,7 @@ def register():
 @app.route('/me/')
 @login_required
 def current_user_info():
-    return u'user: ' + session['username'] + u' id: ' + session['user_id']
+    return u'user: ' + g.user.name + u' id: ' + str(g.user._id)
 
 
 @app.route('/work/<username>/',  methods=['GET'])
@@ -159,7 +169,7 @@ def user_info(username):
                 title='User',
                 works=connection.Work.find({'owner.$id': user._id}),
                 username=username,
-                is_current_user=str(user['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False
+                is_current_user=user == g.user
             )
     else:
         return 'we have no user with this login'
@@ -170,7 +180,6 @@ def user_info(username):
 def login():
     login_form = forms.LoginForm()
     if login_form.validate_on_submit():
-        session['username'] = login_form.user.login
         session['user_id'] = str(login_form.user._id)
         return 'Logged in!'
     return render_template('forms/login.html', form=login_form)
@@ -178,7 +187,6 @@ def login():
 
 @app.route('/logout/')
 def logout():
-    session.pop('username', None)
     session.pop('user_id', None)
     return redirect('/')
 
@@ -223,8 +231,7 @@ def add_chapter(username, work):
                                             ]})
         if current_work:
             #TODO: check shared rights
-            if(str(user['_id']) == str(session['user_id'])
-               if 'user_id' in session and 'username' in session else False):
+            if user == g.user:
                 if request.method == "GET":
                     return render_template("add_chapter.html", work=current_work)
                 else:
@@ -262,7 +269,7 @@ def work_description(username, work):
                     'chapters.html',
                     username=username,
                     work=current_work,
-                    is_current_user=str(user['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False
+                    is_current_user=user == g.user
                 )
         else:
             #TODO: more informative
