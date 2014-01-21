@@ -74,25 +74,23 @@ def work_rights_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         owning_user = connection.User.find_one({'login': kwargs['username']})
-        if owning_user:
-            work = connection.Work.find_one({'$and': [
-                                                    {'owner.$id': owning_user._id},
-                                                    {'name': kwargs['work']}
-                                                ]})
-            if work:
-                if work['access'] == "public":
-                    #TODO: forward to function's arguments owning_user and work
-                    return f(*args, **kwargs)
-                else:
-                    #TODO: make access control
-                    #TODO: write some message
-                    return redirect('/')
-            else:
-                #TODO: write some message
-                return redirect('/')
-        else:
+        if not owning_user:
             #TODO: write some message
             return redirect('/')
+        work = connection.Work.find_one({'$and': [
+                                                {'owner.$id': owning_user._id},
+                                                {'name': kwargs['work']}
+                                            ]})
+        if not work:
+            #TODO: write some message
+            return redirect('/')
+        if work['access'] != "public":
+            #TODO: make access control
+            #TODO: write some message
+            return redirect('/')
+        #TODO: forward to function's arguments owning_user and work
+        return f(*args, **kwargs)
+
     return decorated_function
 
 
@@ -100,32 +98,29 @@ def chapter_rights_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         owning_user = connection.User.find_one({'login': kwargs['username']})
-        if owning_user:
-            work = connection.Work.find_one({'$and': [
-                                            {'owner.$id': owning_user._id},
-                                            {'name': kwargs['work']}
-                                        ]})
-            if work:
-                have_this_inner = False
-                for inner in work['chapters']:
-                    if inner['name'] == kwargs['file']:
-                        have_this_inner = True
-                if have_this_inner:
-                    if work['access'] == "public":
-                        return f(*args, **kwargs)
-                    else:
-                        #TODO: make access control
-                        #TODO: write some message
-                        return redirect('/')
-                else:
-                    #TODO: write some message
-                    return redirect('/')
-            else:
-                #TODO: write some message
-                return redirect('/')
-        else:
+        if not owning_user:
             #TODO: write some message
             return redirect('/')
+        work = connection.Work.find_one({'$and': [
+                                        {'owner.$id': owning_user._id},
+                                        {'name': kwargs['work']}
+                                    ]})
+        if not work:
+            #TODO: write some message
+            return redirect('/')
+        have_this_inner = False
+        for inner in work['chapters']:
+            if inner['name'] == kwargs['file']:
+                have_this_inner = True
+        if not have_this_inner:
+            #TODO: write some message
+            return redirect('/')
+        if work['access'] != "public":
+            #TODO: make access control
+            #TODO: write some message
+            return redirect('/')
+        return f(*args, **kwargs)
+
     return decorated_function
 
 
