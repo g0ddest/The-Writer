@@ -12,11 +12,9 @@ import os
 
 @app.before_request
 def before_request():
-    print session
     g.user = None
     if 'user_id' in session:
         g.user = connection.User.find_one({'_id': ObjectId(session['user_id'])})
-        print g.user
 
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))

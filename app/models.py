@@ -17,6 +17,10 @@ class User(Document):
         'login': unicode,
         'password': basestring, #TODO binary
         'name': unicode,
+        'bitbucket': {
+            'oauth_token': basestring,
+            'oauth_token_secret': basestring
+        }
     }
     validators = {
         'login': max_length(50),
@@ -31,6 +35,23 @@ class User(Document):
     use_dot_notation = True
     def __repr__(self):
         return '<User %r>' % (self.login)
+    
+    @classmethod
+    def get_or_create_from_bitbucket(_, data):
+        user = connection.User.find_one({'bitbucket.oauth_token': data['oauth_token'],
+                          'bitbucket.oauth_token_secret': data['oauth_token_secret']
+                          })
+        if not user:
+            user = connection.User({
+                    'bitbucket': {
+                        'oauth_token': data['oauth_token'],
+                        'oauth_token_secret': data['oauth_token_secret']
+                    },
+                    'name': data['display_name'],
+                    'login': data['username']
+            }).save()
+        return user
+
 
 @connection.register
 class Work(Document):
