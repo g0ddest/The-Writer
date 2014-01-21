@@ -1,4 +1,4 @@
-from app import app, connection, models
+from app import app, connection, models, forms
 
 from flask import Flask, session, render_template, Markup, request, redirect, escape, abort
 from jinja2 import evalcontextfilter
@@ -195,11 +195,15 @@ def user_info(username):
 @app.route('/login/', methods=['GET', 'POST'])
 @guest_required
 def login():
-    if request.method == 'POST':
+    login_form = forms.LoginForm()
+    if login_form.validate_on_submit():
         mdfive = hashlib.md5()
-        mdfive.update(request.form['password'])
+        mdfive.update(login_form.password.data)
         #TODO: Potential injection. Parse data, please
-        user = connection.User.find_one({'$and': [{'login': request.form['username']}, {'password': mdfive.hexdigest()}]})
+        user = connection.User.find_one({'$and': [
+                        {'login': login_form.login.data},
+                        {'password': mdfive.hexdigest()}
+                    ]})
         if user:
             session['username'] = user['login']
             session['user_id'] = str(user['_id'])
@@ -207,13 +211,7 @@ def login():
         else:
             abort(401)
         #return redirect('/')
-    return '''
-        <form action="" method="post">
-            <p><input type=text name=username>
-            <p><input type=text name=password>
-            <p><input type=submit value=Login>
-        </form>
-    '''
+    return render_template('forms/login.html', form=login_form)
 
 
 @app.route('/logout/')
