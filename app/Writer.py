@@ -4,7 +4,7 @@ from flask import Flask, session, render_template, Markup, request, redirect, es
 from jinja2 import evalcontextfilter
 import markdown as md
 from mongokit import Connection
-import hashlib
+
 from functools import wraps
 import datetime
 import os
@@ -197,20 +197,9 @@ def user_info(username):
 def login():
     login_form = forms.LoginForm()
     if login_form.validate_on_submit():
-        mdfive = hashlib.md5()
-        mdfive.update(login_form.password.data)
-        #TODO: Potential injection. Parse data, please
-        user = connection.User.find_one({'$and': [
-                        {'login': login_form.login.data},
-                        {'password': mdfive.hexdigest()}
-                    ]})
-        if user:
-            session['username'] = user['login']
-            session['user_id'] = str(user['_id'])
-            return 'Logged in!'
-        else:
-            abort(401)
-        #return redirect('/')
+        session['username'] = login_form.user.login
+        session['user_id'] = str(login_form.user._id)
+        return 'Logged in!'
     return render_template('forms/login.html', form=login_form)
 
 
