@@ -20,7 +20,10 @@ class User(Document):
         'bitbucket': {
             'oauth_token': basestring,
             'oauth_token_secret': basestring
-        }
+        },
+        'vkontakte': {
+            'uid': int
+        },
     }
     validators = {
         'login': max_length(50),
@@ -47,9 +50,24 @@ class User(Document):
                         'oauth_token': data['oauth_token'],
                         'oauth_token_secret': data['oauth_token_secret']
                     },
+                    'vkontakte': {'uid': None},
                     'name': data['display_name'],
                     'login': data['username']
-            }).save()
+            })
+            user.save()
+        return user
+
+    @classmethod
+    def get_or_create_from_vkontakte(_, data):
+        user = connection.User.find_one({'vkontakte.uid': data['uid']})
+        if not user:
+            user = connection.User({
+                    'bitbucket': {'oauth_token': None, 'oauth_token_secret': None },
+                    'vkontakte': { 'uid': data['uid'], },
+                    'name': data['first_name'] + u'' + data['last_name'],
+                    'login': u'vk' + str(data['uid'])
+            })
+            user.save()
         return user
 
 

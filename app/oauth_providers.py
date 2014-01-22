@@ -51,3 +51,48 @@ def authorized_bitbucket(resp):
 @bitbucket.tokengetter
 def get_bitbucket_token(token=None):
     return session.get('bitbucket_token')
+
+
+
+
+
+vkontakte = oauth.remote_app('vkontakte',
+    base_url='https://api.vk.com/method/',
+    request_token_url=None,
+    access_token_url='https://oauth.vk.com/access_token',
+    authorize_url='http://oauth.vk.com/authorize',
+    consumer_key=app.config['VKONTAKTE_KEY'],
+    consumer_secret=app.config['VKONTAKTE_SECRET'],
+    request_token_params={'response_type':'code',
+                          'scope': ('notify, ')
+                          }
+)
+
+@app.route('/login/vkontakte')
+def login_vkontakte():
+    return vkontakte.authorize(
+        callback=url_for('authorized_vkontakte',
+        next=request.args.get('next') or request.referrer or None,
+        _external=True))
+
+@app.route('/authorized/vkontakte')
+@vkontakte.authorized_handler
+def authorized_vkontakte(resp):
+    next_url = request.args.get('next') or '/'
+    if resp is None:
+        flash(u'You denied the request to sign in.')
+        return redirect(next_url)
+
+    print resp
+    session['vkontakte_token'] = (resp['access_token'], '')
+
+    req_user = vkontakte.get('users.get', data={'user_id':resp['user_id']})
+    user = connection.User.get_or_create_from_vkontakte( req_user.data['response'][0] )
+    session['user_id'] = str(user._id)
+
+    flash('You were signed in with VKontakte')
+    return redirect(next_url)
+
+@vkontakte.tokengetter
+def get_vkontakte_token(token=None):
+    return session.get('vkontakte_token')
