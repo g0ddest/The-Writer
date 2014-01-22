@@ -36,6 +36,7 @@ class User(Document):
         },
     ]
     use_dot_notation = True
+    use_schemaless = True
     def __repr__(self):
         return '<User %r>' % (self.login)
     
@@ -50,7 +51,6 @@ class User(Document):
                         'oauth_token': data['oauth_token'],
                         'oauth_token_secret': data['oauth_token_secret']
                     },
-                    'vkontakte': {'uid': None},
                     'name': data['display_name'],
                     'login': data['username']
             })
@@ -62,7 +62,6 @@ class User(Document):
         user = connection.User.find_one({'vkontakte.uid': data['uid']})
         if not user:
             user = connection.User({
-                    'bitbucket': {'oauth_token': None, 'oauth_token_secret': None },
                     'vkontakte': { 'uid': data['uid'], },
                     'name': data['first_name'] + u'' + data['last_name'],
                     'login': u'vk' + str(data['uid'])
