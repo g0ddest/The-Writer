@@ -70,6 +70,13 @@ vkontakte = oauth.remote_app('vkontakte',
 
 @app.route('/login/vkontakte')
 def login_vkontakte():
+    if session.has_key('vkontakte_token') and session.has_key('vkontakte_uid'):
+        req_user = vkontakte.get('users.get', data={'user_id':session['vkontakte_uid']})
+        user = connection.User.find_one({
+            'vkontakte.uid': req_user.data['response'][0]['uid']
+        })
+        session['user_id'] = str(user._id)
+        return redirect('/') # FIXME
     return vkontakte.authorize(
         callback=url_for('authorized_vkontakte',
         next=request.args.get('next') or request.referrer or None,
@@ -83,8 +90,8 @@ def authorized_vkontakte(resp):
         flash(u'You denied the request to sign in.')
         return redirect(next_url)
 
-    print resp
     session['vkontakte_token'] = (resp['access_token'], '')
+    session['vkontakte_uid'] = resp['user_id']
 
     req_user = vkontakte.get('users.get', data={'user_id':resp['user_id']})
     user = connection.User.get_or_create_from_vkontakte( req_user.data['response'][0] )
