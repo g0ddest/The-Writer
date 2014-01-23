@@ -24,6 +24,9 @@ class User(Document):
         'vkontakte': {
             'uid': int
         },
+        'google': {
+            'id': unicode
+        },
     }
     validators = {
         'login': max_length(50),
@@ -69,6 +72,17 @@ class User(Document):
             user.save()
         return user
 
+    @classmethod
+    def get_or_create_from_google(_, data):
+        user = connection.User.find_one({'google.id': data['id']})
+        if not user:
+            user = connection.User({
+                    'google': { 'id': data['id'], },
+                    'name': data['name'],
+                    'login': u'google' + data['id']
+            })
+            user.save()
+        return user
 
 @connection.register
 class Work(Document):
