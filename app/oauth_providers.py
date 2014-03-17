@@ -100,6 +100,7 @@ def authorized_vkontakte(resp):
     flash('You were signed in with VKontakte')
     return redirect(next_url)
 
+
 @vkontakte.tokengetter
 def get_vkontakte_token(token=None):
     return session.get('vkontakte_token')
@@ -150,3 +151,140 @@ def authorized_google(resp):
 @google.tokengetter
 def get_google_token(token=None):
     return session.get('google_token')
+
+
+
+
+
+facebook = oauth.remote_app('facebook',
+    base_url='https://graph.facebook.com/',
+    request_token_url=None,
+    access_token_url='/oauth/access_token',
+    authorize_url='https://www.facebook.com/dialog/oauth',
+    consumer_key=app.config['FACEBOOK_KEY'],
+    consumer_secret=app.config['FACEBOOK_SECRET'],
+    request_token_params={'scope': ('email, ')}
+)
+
+
+@app.route("/login/facebook")
+def facebook_login():
+    return facebook.authorize(callback=url_for('facebook_authorized',
+        next=request.args.get('next'), _external=True))
+
+@app.route("/authorized/facebook")
+@facebook.authorized_handler
+def facebook_authorized(resp):
+    next_url = request.args.get('next') or '/'
+    if resp is None or 'access_token' not in resp:
+        flash(u'You denied the request to sign in.')
+        return redirect(next_url)
+    session['facebook_token'] = (
+        resp['oauth_token'],
+        resp['oauth_token_secret']
+    )
+
+    session['logged_in'] = True
+    session['facebook_token'] = (resp['access_token'], '')
+
+    req_user = facebook.get('user').data
+    user = connection.User.get_or_create_from_facebook( req_user )
+    session['user_id'] = str(user._id)
+
+    flash('You were signed in with Bitbucket')
+    return redirect(next_url)
+
+
+@facebook.tokengetter
+def get_facebook_token(token=None):
+    return session.get('facebook_token')
+
+
+
+
+
+
+
+twitter = oauth.remote_app('twitter',
+    base_url='https://api.twitter.com/1/',
+    request_token_url='https://api.twitter.com/oauth/request_token',
+    access_token_url='https://api.twitter.com/oauth/access_token',
+    authorize_url='https://api.twitter.com/oauth/authenticate',
+    consumer_key=app.config['TWITTER_KEY'],
+    consumer_secret=app.config['TWITTER_SECRET']
+)
+
+
+@app.route("/login/twitter")
+def twitter_login():
+    return twitter.authorize(callback=url_for('oauth_authorized',
+        next=request.args.get('next') or request.referrer or None))
+
+
+@app.route('/authorized/twitter')
+@twitter.authorized_handler
+def oauth_authorized(resp):
+    next_url = request.args.get('next') or url_for('index')
+    if resp is None:
+        flash(u'You denied the request to sign in.')
+        return redirect(next_url)
+
+    session['twitter_token'] = (
+        resp['oauth_token'],
+        resp['oauth_token_secret']
+    )
+    session['twitter_user'] = resp['screen_name']
+
+    req_user = twitter.get('user').data
+    user = connection.User.get_or_create_from_twitter( req_user )
+    session['user_id'] = str(user._id)
+
+    flash('You were signed in as %s' % resp['screen_name'])
+    return redirect(next_url)
+
+
+@twitter.tokengetter
+def get_twitter_token(token=None):
+    return session.get('twitter_token')
+
+
+
+
+
+
+
+github = oauth.remote_app('github',
+    base_url='https://api.github.com/',
+    request_token_url=None,
+    access_token_url='https://github.com/login/oauth/access_token',
+    authorize_url='https://github.com/login/oauth/authorize',
+    consumer_key= app.config['GITHUB_KEY'],
+    consumer_secret= app.config['GITHUB_SECRET'],
+    request_token_params={'scope': 'user:email'},
+)
+
+@app.route('/login/github')
+def github_login():
+    return github.authorize()
+
+
+@app.route('/authorized/github')
+@github.authorized_handler
+def github_authorized(resp):
+    next_url = request.args.get('next') or url_for('index')
+    if resp is None:
+        flash(u'You denied the request to sign in.')
+        return redirect(next_url)
+    session['oauth_token'] = (resp['access_token'], '')
+
+    req_user = github.get('user')
+    user = connection.User.get_or_create_from_github( req_user )
+    session['user_id'] = str(user._id)
+    flash('You were signed in as %s' % resp['screen_name'])
+    return redirect(next_url)
+
+@github.tokengetter
+def get_github_oauth_token(token=None):
+    return session.get('oauth_token')
+
+

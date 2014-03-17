@@ -27,6 +27,16 @@ class User(Document):
         'google': {
             'id': unicode
         },
+        'facebook': {
+            'uid': int
+
+        },
+        'twitter':{
+            'uid': int
+        },
+        'github':{
+            'uid' : int
+        }
     }
     validators = {
         'login': max_length(50),
@@ -83,6 +93,43 @@ class User(Document):
             })
             user.save()
         return user
+
+    @classmethod
+    def get_or_create_from_facebook(_, data):
+        user = connection.User.find_one({'facebook.id': data['id']})
+        if not user:
+            user = connection.User({
+                'facebook':{'id': data['id'], },
+                'name': data['name'],
+                'login': u'facebook'+data['id']
+            })
+            user.save()
+        return user
+
+    @classmethod
+    def get_or_create_from_twitter(_, data):
+        user = connection.User.find_one({'twitter.id': data['id']})
+        if not user:
+            user = connection.User({
+                'twitter':{'id': data['id'], },
+                'name': data['name'],
+                'login': u'twitter'+data['id']
+            })
+            user.save()
+        return user
+
+    @classmethod
+    def get_or_create_from_github(_, data):
+        user = connection.User.find_one({'github.id': data['id']})
+        if not user:
+            user = connection.User({
+                'github':{'id': data['id'], },
+                'name': data['name'],
+                'login': u'github'+data['id']
+            })
+            user.save()
+        return user
+
 
 @connection.register
 class Work(Document):
