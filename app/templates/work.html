@@ -8,5 +8,8 @@
                 {{ text }}
             {% endfilter %}
         </div>
+        {% if is_current_user %}
+			<a href="/work/{{ link_user }}/{{ link_work }}/{{ link_chapter }}/edit">Edit</a>
+        {% endif %}
   </body>
 </html>

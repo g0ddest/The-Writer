@@ -1,0 +1,1 @@
+This text isn't as long as previous one. But it's just as senseless.

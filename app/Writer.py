@@ -280,7 +280,8 @@ def add_chapter(username, work):
                     current_work.chapters.append({
                         'name': request.form["name"],
                         'title': request.form["title"],
-                        'created': datetime.datetime.now()
+                        'created': datetime.datetime.now(),
+                        'updated': datetime.datetime.now()
                     })
                     current_work.save()
                     return "ok"
@@ -314,11 +315,69 @@ def work_description(username, work):
 @app.route('/work/<username>/<work>/<file>/', methods=['GET'])
 @chapter_rights_required
 def work(username, work, file):
-    return \
-        render_template(
-            'work.html',
-            title='Work',
-            text='\n\r%s' % api_work_get(username, work, file))
+    user = connection.User.find_one({'login':username})
+    if user:
+        current_work = connection.Work.find_one({'$and': [{'owner.$id': user['_id']}, {'name': work}]})
+        if current_work:
+            for ch in current_work.chapters:
+                if ch['name']==str(file): 
+                    current_chapter = ch
+                    break
+            if current_chapter:
+                return \
+                    render_template(
+			            'work.html',
+                        title='Work',
+                        text='\n\r%s' % api_work_get(username, work, file),
+			            is_current_user=str(user['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False,
+			            link_user=username,
+			            link_work=work,
+			            link_chapter=file
+                    )
+            else:
+				return 'There\'s no chapter "%s" in this work' % str(file)
+        else:
+            return 'Work not found'
+    else:
+        return 'User not found'
+
+@app.route('/work/<username>/<work>/<file>/edit', methods=['GET', 'POST'])
+@chapter_rights_required
+def chapter_edit(username, work, file):
+    user = connection.User.find_one({'login':username})
+    if user:
+        current_work = connection.Work.find_one({'$and': [{'owner.$id': user['_id']}, {'name': work}]})
+        if current_work:
+            for ch in current_work.chapters:
+			    if ch['name']==str(file): 
+				    current_chapter = ch
+				    chapter_index=current_work.chapters.index(ch)
+				    break
+            if current_chapter:
+                if request.method == "GET":
+                    return render_template(
+			            'edit_chapter.html',
+                        title=current_work['name'],
+                        name=current_chapter['title'],
+                        text='\n\r%s' % api_work_get(username, work, file)
+                    )
+                else:
+                    args=(works_location, username, work, file)
+                    with open("%s/%s/%s/%s.md" % args, 'w') as edfile:
+					    edfile.write(request.form["text"].encode('utf_8'))
+					
+                    current_chapter['updated']=datetime.datetime.now()
+                    current_chapter['title']=request.form["title"]
+                    current_work['modified']=datetime.datetime.now()
+                    current_work.chapters[chapter_index]=current_chapter
+                    current_work.save()
+                    return 'Chapter "%s" modified succesfully' % current_chapter['title']					
+            else:
+			    return 'There\'s no chapter "%s" in this work' % str(file)
+        else:
+            return 'Work not found'
+    else:
+        return 'User not found'
 
 # ------------------------
 # api for web application

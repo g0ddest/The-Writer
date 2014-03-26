@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/html">
+<head>
+    <title>Edit chapter of "{{ title }}"</title>
+    <link type="text/css" href="/static/font-awesome/css/font-awesome.css" rel="stylesheet"/>
+    <link type="text/css" href="/static/hallo.css" rel="stylesheet"/>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.2/jquery-ui.min.js"></script>
+    <script src="http://rangy.googlecode.com/svn/trunk/currentrelease/rangy-core.js"></script>
+    <link type="text/css" href="/static/theme/jquery-ui-1.10.3.custom.min.css" rel="stylesheet" />
+    <script src="/static/hallo.js"></script>
+    <script src="/static/to-markdown.js"></script>
+</head>
+<body>
+    <script>
+        var markdownize = function(content) {
+                var html = content.split("\n").map($.trim).filter(function(line) {
+                  return line != "";
+                }).join("\n");
+                return toMarkdown(html);
+          };
+
+        jQuery(document).ready(function() {
+          jQuery('#write').hallo({
+            plugins: {
+              'halloformat': {},
+              'halloheadings': {},
+              'hallolists': {},
+              'halloreundo': {}
+            },
+            toolbar: 'halloToolbarFixed'
+          });
+
+          $('#submit').click(function(){
+               if($('#title').val() == ""){
+                   alert("Enter title")
+               }
+
+                $.post(
+                        "",
+                        {title: $('#title').val(), text: markdownize($('#write').html())},
+                        function() {
+                            window.location =  ".."
+                        }
+                       );
+
+            });
+        })
+
+    </script>
+    <div>
+        <input style="width: 80%;height: 30px;font-size: 25px;border: 0;background: transparent;" id="title" placeholder="Введите название" value="{{ name }}"/>
+        <button id="submit" style="height: 30px;">Сохранить</button>
+    </div>
+    <div id="write" style="margin-top:60px;width:100%;height:100%;">
+        {{ text }}
+    </div>
+</body>
+</html>
