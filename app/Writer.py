@@ -4,10 +4,12 @@ from flask import Flask, session, render_template, Markup, request, redirect, es
 from jinja2 import evalcontextfilter
 import markdown as md
 from mongokit import Connection
+from bson.objectid import ObjectId
 import hashlib
 from functools import wraps
 import datetime
 import os
+import time
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -41,12 +43,24 @@ class Markdown(object):
         self._instance.registerExtensions([instance], configs)
         return ext_cls
 
-
 works_location = u'%s/works' % CURRENT_DIR
 
 Markdown(app)
 
 DEBUG = True
+
+def make_me_shine(cursor):
+    result = [ ]
+    for rec in cursor:
+        if ',' in rec['path']:
+            parents = rec['path'].split(',')
+            for rec1 in result:
+                if str(rec1['_id']) == parents[len(parents)-1]:
+                    result.insert(result.index(rec1)+1, rec)
+                    break
+        else:
+            result.append(rec)  
+    return result
 
 def login_required(f):
     @wraps(f)
@@ -57,7 +71,6 @@ def login_required(f):
             #TODO: write some message
             return redirect('/')
     return decorated_function
-
 
 def guest_required(f):
     @wraps(f)
@@ -81,7 +94,8 @@ def work_rights_required(f):
                                                 ]})
             if work:
                 if work['access'] == "public":
-                    #TODO: forward to function's arguments owning_user and work
+                    kwargs['work'] = work
+                    kwargs['username'] = owning_user
                     return f(*args, **kwargs)
                 else:
                     #TODO: make access control
@@ -94,7 +108,6 @@ def work_rights_required(f):
             #TODO: write some message
             return redirect('/')
     return decorated_function
-
 
 def chapter_rights_required(f):
     @wraps(f)
@@ -112,6 +125,8 @@ def chapter_rights_required(f):
                         have_this_inner = True
                 if have_this_inner:
                     if work['access'] == "public":
+                        kwargs['username'] = owning_user
+                        kwargs['work'] = work
                         return f(*args, **kwargs)
                     else:
                         #TODO: make access control
@@ -128,16 +143,63 @@ def chapter_rights_required(f):
             return redirect('/')
     return decorated_function
 
+def process_comments(f):
+    @wraps(f)
+    def wrapper_function(*args, **kwargs):
+        chapter_id = 0
+        if 'file' in kwargs:
+            for ch in kwargs['work'].chapters:
+                if ch['name']==kwargs['file']: chapter_id=ch['id']
+        if request.method == "GET":
+            result_set = [ ]
+            cond_string = '^%s_%s' % (kwargs['work']._id, str(chapter_id))
+            comm_request = connection.Comment_tree.find({'path': {'$regex': cond_string} })
+            sorted_array = make_me_shine(comm_request)
+            counter = 0
+            for rec in sorted_array:
+                indent = 10 * rec['path'].count(',')
+                comm_data = connection.Comments.find_one({'comment_id': rec['_id']})
+                created = comm_data['created'].strftime('%Y, %b %d, %H:%M')
+                result_set.append({
+                        'id': comm_data['comment_id'],
+                        'author': comm_data['author'].login,
+                        'created': created,
+                        'value': comm_data['text'],
+                        'counter': counter,
+                        'indent': indent
+                })
+                counter += 1
+            kwargs['comments'] = result_set
+            return f(*args, **kwargs)
+        else:
+            comm_id = ObjectId()
+            if request.form['ansref'] == 'new':
+                path = u'%s_%s' % (kwargs['work']._id, str(chapter_id))
+            else:
+                ans_id = ObjectId(request.form['ansref'])
+                answered_comm = connection.Comment_tree.find_one({'_id': ans_id})
+                path = u'%s,%s' % (answered_comm['path'], request.form['ansref'])
+            connection.Comment_tree({
+                '_id': comm_id,
+                'path': path
+            }).save()
+            connection.Comments({
+                'comment_id': comm_id,
+                'text': request.form['commtext'],
+                'author': kwargs['username'],
+                'created': datetime.datetime.now(),
+                'updated': datetime.datetime.now()
+            }).save()
+            return 'Fine'
+    return wrapper_function
 
 @app.route('/')
 def hello_world():
     return render_template('index.html')
 
-
 @app.route('/about/')
 def about():
     return 'The about page'
-
 
 @app.route('/register/', methods=['GET', 'POST'])
 @guest_required
@@ -185,7 +247,7 @@ def user_info(username):
                 'user.html',
                 title='User',
                 works=connection.Work.find({'owner.$id': user._id}),
-                username=username,
+                username=user['login'],
                 is_current_user=str(user['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False
             )
     else:
@@ -255,74 +317,63 @@ def work_add(username):
 @app.route('/work/<username>/<work>/+/', methods=['GET', 'POST'])
 @work_rights_required
 def add_chapter(username, work):
-    user = connection.User.find_one({'login': username})
-    if user:
-        current_work = connection.Work.find_one({'$and': [
-                                                {'owner.$id': user['_id']},
-                                                {'name': work}
-                                            ]})
-        if current_work:
-            #TODO: check shared rights
-            if(str(user['_id']) == str(session['user_id'])
-               if 'user_id' in session and 'username' in session else False):
-                if request.method == "GET":
-                    return render_template("add_chapter.html", work=current_work)
-                else:
-                    if not os.path.isdir("%s/%s" % (works_location, username)):
-                        os.makedirs("%s/%s" % (works_location, username))
-                    if not os.path.isdir("%s/%s/%s" % (works_location, username, work)):
-                        os.makedirs("%s/%s/%s" % (works_location, username, work))
-                    args = (works_location, username, work, request.form["name"])
-                    with open("%s/%s/%s/%s.md" % args, 'w') as file:
-                        file.write(request.form["text"].encode('utf-8'))
-                    
-                    current_work.modified = datetime.datetime.now()
-                    current_work.chapters.append({
-                        'name': request.form["name"],
-                        'title': request.form["title"],
-                        'created': datetime.datetime.now()
-                    })
-                    current_work.save()
-                    return "ok"
-            else:
-                return "You have no permission"
+    #TODO: check shared rights
+    if(str(username['_id']) == str(session['user_id'])
+       if 'user_id' in session and 'username' in session else False):
+        if request.method == "GET":
+            return render_template("add_chapter.html", work=work)
         else:
-            #TODO: more informative
-            return "No such work"
-
-@app.route('/work/<username>/<work>/', methods=['GET'])
-@work_rights_required
-def work_description(username, work):
-    user = connection.User.find_one({'login': username})
-    if user:
-        current_work = connection.Work.find_one({'$and': [{'owner.$id': user['_id']}, {'name': work}]})
-        if current_work:
-            return \
-                render_template(
-                    'chapters.html',
-                    username=username,
-                    work=current_work,
-                    is_current_user=str(user['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False
-                )
-        else:
-            #TODO: more informative
-            return "No such work"
+            if not os.path.isdir("%s/%s" % (works_location, username['login'])):
+                os.makedirs("%s/%s" % (works_location, username['login']))
+            if not os.path.isdir("%s/%s/%s" % (works_location, username['login'], work['name'])):
+                os.makedirs("%s/%s/%s" % (works_location, username['login'], work['name']))
+            args = (works_location, username['login'], work['name'], request.form["name"])
+            with open("%s/%s/%s/%s.md" % args, 'w') as file:
+                file.write(request.form["text"].encode('utf-8'))
+            
+            work.modified = datetime.datetime.now()
+            ch_id = len(work.chapters) + 1
+            work.chapters.append({
+                'id': ch_id,
+                'name': request.form["name"],
+                'title': request.form["title"],
+                'created': datetime.datetime.now(),
+                'updated': datetime.datetime.now()
+            })
+            work.save()
+            return "ok"
     else:
-        #TODO: more informative
-        return "No such user"
+        return "You have no permission"
 
-@app.route('/work/<username>/<work>/<file>/', methods=['GET'])
-@chapter_rights_required
-def work(username, work, file):
+@app.route('/work/<username>/<work>/', methods=['GET', 'POST'])
+@work_rights_required
+@process_comments
+def work_description(username, work, comments=None):
     return \
-        render_template(
-            'work.html',
-            title='Work',
-            text='\n\r%s' % api_work_get(username, work, file))
+            render_template(
+                'chapters.html',
+                username=username['login'],
+                work=work,
+                is_current_user=str(username['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False,
+                comments=comments)
+    
+
+@app.route('/work/<username>/<work>/<file>/', methods=['GET', 'POST'])
+@chapter_rights_required
+@process_comments
+def work(username, work, file, comments=None):
+    return \
+            render_template(
+                'work.html',
+                title='Work',
+                text='\n\r%s' % api_work_get(username['login'], work['name'], file),
+                is_current_user=str(username['_id']) == str(session['user_id']) if 'user_id' in session and 'username' in session else False,
+                username=username['login'],
+                comments=comments)
+
 
 # ------------------------
 # api for web application
-
 
 @app.route('/api/work/<username>/<work>/<file>/', methods=['GET'])
 def api_work_get(username, work, file):

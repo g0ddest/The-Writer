@@ -1,5 +1,6 @@
 from app import app, connection
 from mongokit import Document
+from bson.objectid import ObjectId
 import datetime
 
 def max_length(length):
@@ -47,6 +48,7 @@ class Work(Document):
         'modified': datetime.datetime,
         'chapters': [
             {
+                'id' : int,  #added for storing comments of separate chapters
                 'name': unicode,
                 'title': unicode,
                 'created': datetime.datetime,
@@ -66,7 +68,40 @@ class Work(Document):
     def __repr__(self):
         return '<Work %r>' % (self.title)
 
-connection.register([User, Work])
+@connection.register
+class Comment_tree(Document):
+    __database__ = app.config['DB_NAME']
+    __collection__ = "comment_tree"
+    #uses Materialized Path model. Easier to get whole branches that way
+    structure = {
+        '_id' : ObjectId, #id of a comment, unique one
+        'path' : unicode #stores comment's position in a tree, starting with workid_chapterid
+    }
+    validators = { }
+    indexes = [ ]
+    required_fields = [ ]
+    use_dot_notation = True
+        
+@connection.register
+class Comments(Document):
+    __database__ = app.config['DB_NAME']
+    __collection__ = 'comments'
+    structure = {
+        'comment_id' : ObjectId,
+        'text' : unicode,
+        'author' : User,
+        'created' : datetime.datetime,
+        'updated' : datetime.datetime
+    }
+    default_values = {
+		'created' : datetime.datetime.now()
+    }
+    validators = { }
+    indexes = [ ]
+    use_dot_notation = True
+    use_autorefs = True   
+
+connection.register([User, Work, Comments, Comment_tree])
 
 #create indexes:
 for document_name, obj in connection._registered_documents.iteritems():

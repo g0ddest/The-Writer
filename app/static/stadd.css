@@ -1,0 +1,22 @@
+.comment
+{
+	margin-bottom: 10px;	
+}
+
+#comm_header 
+{ 
+	background-color: #78BCBC;
+	font-weight:bold;
+	margin: 0 0 0 0;
+	padding: 1px 5px;
+}
+
+#comm_body
+{ 
+	background-color: #FFFFFF;
+	border-left: 1px solid #78BCBC;
+	border-right: 1px solid #78BCBC;
+	border-bottom: 1px solid #78BCBC;
+	margin: 0 0 0 0;
+	padding: 1px 5px;
+}
